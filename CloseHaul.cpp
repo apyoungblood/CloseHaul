@@ -4,61 +4,13 @@
 #include <SDL2/SDL_image.h>
 #include <string>
 #include <cmath>
+#include <SDL2/SDL_mixer.h>
 
 //Screen dimension constants
 const int SCREEN_WIDTH = 320;
 const int SCREEN_HEIGHT = 240;
 
-//class Vector
-//{
-//public:
-//    Vector(double,double);
-//    double getX();
-//    double getY();
-//    double getSpeed();
-//    double getAngle();
-//    void setSpeed(double);
-//    void setAngle(double);
-//private:
-//    double speed,angle;
-//}
-//
-//Vector::Vector(double speed,double angle)
-//{
-//    this -> speed = speed;
-//    this -> angle = angle;
-//}
-//
-//double Vector::getX()
-//{
-//    return speed*cos(angle);
-//}
-//
-//double Vector::getY()
-//{
-//    return speed*sin(angle);
-//}
-//
-//double Vector::getSpeed()
-//{
-//    return speed;
-//}
-//
-//double Vector::getAngle()
-//{
-//    return angle;
-//}
-//
-//void Vector::setAngle(double angle)
-//{
-//    this -> angle = angle;
-//}
-//
-//void Vector::setSpeed(double speed)
-//{
-//    this -> speed = speed;
-//}
-//
+
 //Texture wrapper class
 class LTexture
 {
@@ -91,22 +43,6 @@ class LTexture
 		int mHeight;
 };
 
-//class LSprite
-//{
-//    public:
-//        LSprite(int x, int y);
-//        SDL_Rect getRect();
-//        SDL_Surface* getImage();
-//        void setRect(SDL_Rect);
-//        void move();
-//        void draw(SDL_Surface*);
-//        
-//private:
-//        Vector movement;
-//        double x,y,lastX,lastY,angle,speed;
-//        SDL_Rect rect;
-//        SDL_Surface* image;
-//}
 
 //Start up SDL and create the window
 bool init();
@@ -141,6 +77,9 @@ SDL_Texture *shipTexture;
 //SDL_Renderer *shipRenderer;
 //const int SHIP_HEIGHT = 95;
 //const int SHIP_WIDTH = 108;
+
+//The music that will be played
+Mix_Music *gMusic = NULL;
 
 //The window we'll be rendering to
 SDL_Window* gWindow = NULL;
@@ -246,50 +185,7 @@ int LTexture::getHeight()
 	return mHeight;
 }
 
-//LSprite::LSprite(int x, int y): movement(1.0,0.0)
-//{
-//    this -> x = x
-//    this -> y = y;
-//    lastX = x;
-//    lastY = y;
-//    image = loadImage("Assets/Ship.png");
-//    rect.x = x;
-//    rect.y = y;
-//    rect.w = image->w;
-//    rect.h = image->h;
-//    speed = 1;
-//    angle = 0;
-//}
 
-//SDL_Rect LSprite::getRect()
-//{
-//    return rect;
-//}
-//
-//SDL_Surface* LSprite::getImage()
-//{
-//    return image;
-//}
-//
-//void LSprite::setRect(SDL_Rect rect)
-//{
-//    this -> rect = rect;
-//}
-//
-//void LSprite::move()
-//{
-//    lastX = x;
-//    lastY = y;
-//    x += speed*cos(angle);
-//    y += speed*sin(angle);
-//    rect.x = int(x);
-//    rect.y = int(y);
-//}
-//
-//void LSprite::draw(SDL_Surface* dest)
-//{
-//    blit(image,dest,int(x),int(y));
-//}
 
 
 bool init()
@@ -298,7 +194,7 @@ bool init()
     bool success = true;
     
 	//Initialize SDL
-	if( SDL_Init( SDL_INIT_VIDEO ) < 0 )
+	if( SDL_Init( SDL_INIT_VIDEO | SDL_INIT_AUDIO ) < 0 )
 	{
 		printf( "SDL could not initialize! SDL Error: %s\n", SDL_GetError() );
 		success = false;
@@ -372,6 +268,23 @@ bool loadMedia()
         return 3;
     }
     SDL_FreeSurface(pngSurface);
+    
+    //Initialize SDL_mixer
+    if( Mix_OpenAudio( 44100, MIX_DEFAULT_FORMAT, 2, 2048 ) < 0 )
+    {
+        printf( "SDL_mixer could not initialize! SDL_mixer Error: %s\n", Mix_GetError() );
+        success = false;
+    }
+    
+    //Load Music
+    gMusic = Mix_LoadMUS( "Assets/sailing16.wav" );
+    if (gMusic==NULL)
+    {
+        printf("Failed to load music file! SDL_mixer Error: %s\n", Mix_GetError() );
+        success = false;
+    }
+    
+    
 //    shipSurface = IMG_Load("Assets/Ship.png");
 //    if (shipSurface == NULL )
 //    {
@@ -426,7 +339,12 @@ void close()
     gWindow = NULL;
     gRenderer = NULL;
     
+    //Free the music
+    Mix_FreeMusic( gMusic );
+    gMusic = NULL;
+    
     //Quit SDL subsystems
+    Mix_Quit();
     IMG_Quit();
     SDL_Quit();
 }
@@ -456,9 +374,15 @@ int main(int argc, char *argv[])
             //While application is running
             while ( !quit )
             {
-                //x&y vars for ship sprite
-                int shipx = 0;
-                int shipy = 0;
+
+
+                //If no music is playing, then play it
+                if (Mix_PlayingMusic() == 0)
+                {
+                    //Play the music
+                    Mix_PlayMusic( gMusic, -1 );
+                }
+                
                 //Handle events on queue
                 while ( SDL_PollEvent(&event) != 0 )
                 {
