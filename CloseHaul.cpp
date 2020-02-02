@@ -9,63 +9,10 @@
 const int SCREEN_WIDTH = 320;
 const int SCREEN_HEIGHT = 240;
 
-//class Vector
-//{
-//public:
-//    Vector(double,double);
-//    double getX();
-//    double getY();
-//    double getSpeed();
-//    double getAngle();
-//    void setSpeed(double);
-//    void setAngle(double);
-//private:
-//    double speed,angle;
-//}
-//
-//Vector::Vector(double speed,double angle)
-//{
-//    this -> speed = speed;
-//    this -> angle = angle;
-//}
-//
-//double Vector::getX()
-//{
-//    return speed*cos(angle);
-//}
-//
-//double Vector::getY()
-//{
-//    return speed*sin(angle);
-//}
-//
-//double Vector::getSpeed()
-//{
-//    return speed;
-//}
-//
-//double Vector::getAngle()
-//{
-//    return angle;
-//}
-//
-//void Vector::setAngle(double angle)
-//{
-//    this -> angle = angle;
-//}
-//
-//void Vector::setSpeed(double speed)
-//{
-//    this -> speed = speed;
-//}
-//
 //Texture wrapper class
 class LTexture
 {
 	public:
-		//Initializes variables
-		LTexture();
-
 		//Deallocates memory
 		~LTexture();
 
@@ -76,7 +23,21 @@ class LTexture
 		void free();
 
 		//Renders texture at given point
-		void render( int x, int y, SDL_Rect* clip = NULL );
+//		void render( int x, int y, SDL_Rect* clip = NULL );
+        //Renders texture at given point
+		void render( int x, int y, SDL_Rect* clip = NULL, double angle = 0.0, SDL_Point* center = NULL, SDL_RendererFlip flip = SDL_FLIP_NONE );
+        
+        //Max Velocity
+        static const int LTEX_VEL = 320;
+        
+        //Initializes variables
+		LTexture();
+        
+        //Takes key presses and adjusts velocity
+        void handleEvent( SDL_Event& e );
+        
+        //Moves the ship
+        void move( float timeStep );
 
 		//Gets image dimensions
 		int getWidth();
@@ -89,58 +50,43 @@ class LTexture
 		//Image dimensions
 		int mWidth;
 		int mHeight;
+        
+        //Track the sprite's position and velocity
+        float mPosX, mPosY;
+        float mVelX, mVelY;
 };
 
-//class LSprite
-//{
-//    public:
-//        LSprite(int x, int y);
-//        SDL_Rect getRect();
-//        SDL_Surface* getImage();
-//        void setRect(SDL_Rect);
-//        void move();
-//        void draw(SDL_Surface*);
-//        
-//private:
-//        Vector movement;
-//        double x,y,lastX,lastY,angle,speed;
-//        SDL_Rect rect;
-//        SDL_Surface* image;
-//}
-
-//Start up SDL and create the window
-bool init();
-
-//Loads media
+//The application time based timer
+class LTimer
+{//Start up SDL and create the window
+    public:bool init();
+		//Initializes variables
+		LTimer();//Loads media
 bool loadMedia();
-
-//Frees media and shuts down SDL2
-void close();
-
-//The window to render to
+		//The various clock actions
+		void start();//Frees media and shuts down SDL2
+		void stop();void close();
+		void pause();
+		void unpause();//The window to render to
 SDL_Window *window;
-
-//The surface contained by the window
+		//Gets the timer's time
+		Uint32 getTicks();//The surface contained by the window
 SDL_Surface *surface;
+		//Checks the status of the timer
+		bool isStarted();//The SDL Renderer
+		bool isPaused();SDL_Renderer *renderer;
 
-//The SDL Renderer
-SDL_Renderer *renderer;
-
-//SDL Texture
-SDL_Texture *texture;
-
+    private://SDL Texture
+		//The clock time when the timer startedSDL_Texture *texture;
+		Uint32 mStartTicks;
 //png Texture
-SDL_Surface *pngSurface;
-SDL_Texture *pngTexture;
+		//The ticks stored when the timer was pausedSDL_Surface *pngSurface;
+		Uint32 mPausedTicks;SDL_Texture *pngTexture;
 
-//Ship Texture
-SDL_Surface *shipSurface;
-SDL_Texture *shipTexture;
-//SDL_Window *shipWindow;
-//SDL_Rect *shipRect;
-//SDL_Renderer *shipRenderer;
-//const int SHIP_HEIGHT = 95;
-//const int SHIP_WIDTH = 108;
+		//The timer status//Ship Texture
+		bool mPaused;SDL_Surface *shipSurface;
+		bool mStarted;SDL_Texture *shipTexture;
+};
 
 //The window we'll be rendering to
 SDL_Window* gWindow = NULL;
@@ -148,10 +94,13 @@ SDL_Window* gWindow = NULL;
 //The window renderer
 SDL_Renderer* gRenderer = NULL;
 
+//pngSurface
+SDL_Surface* pngSurface;
+SDL_Texture* pngTexture;
+
 //Scene sprites
-//SDL_Rect gSpriteClips[ 4 ];
 SDL_Rect gSpriteClip;
-LTexture gSpriteSheetTexture;
+LTexture shipLTexture;
 
 LTexture::LTexture()
 {
@@ -161,10 +110,47 @@ LTexture::LTexture()
 	mHeight = 0;
 }
 
+void LTexture::move( float timeStep )
+{
+    //Move texture sprite left or right
+    mPosX += mVelX * timeStep;
+    
+    //If the textured sprite goes too far:
+    
+    //Move textured sprite up or down
+    mPosY += mVelY * timeStep;
+    
+    //If the textured sprite goes too far up/down:
+    if ( mPosY < 0 )
+    {
+        mPosY = 0;
+    }
+    else if ( mPosY > SCREEN_HEIGHT - mHeight )
+    {
+        mPosY = SCREEN_HEIGHT - mHeight;
+    }
+}
+
 LTexture::~LTexture()
 {
 	//Deallocate
 	free();
+}
+
+void LTexture::render( int x, int y, SDL_Rect* clip, double angle, SDL_Point* center, SDL_RendererFlip flip )
+{
+	//Set rendering space and render to screen
+	SDL_Rect renderQuad = { x, y, mWidth, mHeight };
+
+	//Set clip rendering dimensions
+	if( clip != NULL )
+	{
+		renderQuad.w = clip->w;
+		renderQuad.h = clip->h;
+	}
+
+	//Render to screen
+	SDL_RenderCopyEx( gRenderer, mTexture, clip, &renderQuad, angle, center, flip );
 }
 
 bool LTexture::loadFromFile( std::string path )
@@ -217,80 +203,168 @@ void LTexture::free()
 		mTexture = NULL;
 		mWidth = 0;
 		mHeight = 0;
+        mPosX = 0;
+        mPosY =0;
+        mVelX = 0;
+        mVelY = 0;
 	}
 }
-
-void LTexture::render( int x, int y, SDL_Rect* clip )
+void close()
 {
-	//Set rendering space and render to screen
-	SDL_Rect renderQuad = { x, y, mWidth, mHeight };
-
-	//Set clip rendering dimensions
-	if( clip != NULL )
-	{
-		renderQuad.w = clip->w;
-		renderQuad.h = clip->h;
-	}
-
-	//Render to screen
-	SDL_RenderCopy( gRenderer, mTexture, clip, &renderQuad );
+    //Deallocate surface
+//    SDL_FreeSurface(surface);
+    SDL_FreeSurface(pngSurface);
+//    SDL_FreeSurface(shipSurface);
+    
+    //Free loaded images
+    shipLTexture.free();
+    
+    //Destroy Window
+//    SDL_DestroyTexture(texture);
+//    SDL_DestroyRenderer(renderer);
+//    SDL_DestroyWindow(window);
+    SDL_DestroyRenderer( gRenderer );
+    SDL_DestroyWindow( gWindow );
+    gWindow = NULL;
+    gRenderer = NULL;
+    
+    //Quit SDL subsystems
+    IMG_Quit();
+    SDL_Quit();
+}
+void LTexture::handleEvent( SDL_Event& e )
+{
+    //If a key was pressed
+	if( e.type == SDL_KEYDOWN && e.key.repeat == 0 )
+    {
+        //Adjust the velocity
+        switch( e.key.keysym.sym )
+        {
+            case SDLK_UP: mVelY -= LTEX_VEL; break;
+            //case SDLK_UP: printf("pressed up"); break;
+            case SDLK_DOWN: mVelY += LTEX_VEL; break;
+            case SDLK_LEFT: mVelX -= LTEX_VEL; break;
+            case SDLK_RIGHT: mVelX += LTEX_VEL; break;
+            default: printf("Pressed a Key\n"); break;
+        }	
+    }
+    //If a key was released
+    else if( e.type == SDL_KEYUP && e.key.repeat == 0 )
+    {
+        //Adjust the velocity
+        switch( e.key.keysym.sym )
+        {
+            case SDLK_UP: mVelY += LTEX_VEL; break;
+            case SDLK_DOWN: mVelY -= LTEX_VEL; break;
+            case SDLK_LEFT: mVelX += LTEX_VEL; break;
+            case SDLK_RIGHT: mVelX -= LTEX_VEL; break;
+            case SDLK_ESCAPE: close(); break;
+            default: printf("Released a key\n"); break;
+        }
+    }
 }
 
-int LTexture::getWidth()
+LTimer::LTimer()
 {
-	return mWidth;
+    //Initialize the variables
+    mStartTicks = 0;
+    mPausedTicks = 0;
+
+    mPaused = false;
+    mStarted = false;
 }
 
-int LTexture::getHeight()
+void LTimer::start()
 {
-	return mHeight;
+    //Start the timer
+    mStarted = true;
+
+    //Unpause the timer
+    mPaused = false;
+
+    //Get the current clock time
+    mStartTicks = SDL_GetTicks();
+	mPausedTicks = 0;
 }
 
-//LSprite::LSprite(int x, int y): movement(1.0,0.0)
-//{
-//    this -> x = x
-//    this -> y = y;
-//    lastX = x;
-//    lastY = y;
-//    image = loadImage("Assets/Ship.png");
-//    rect.x = x;
-//    rect.y = y;
-//    rect.w = image->w;
-//    rect.h = image->h;
-//    speed = 1;
-//    angle = 0;
-//}
+void LTimer::stop()
+{
+    //Stop the timer
+    mStarted = false;
 
-//SDL_Rect LSprite::getRect()
-//{
-//    return rect;
-//}
-//
-//SDL_Surface* LSprite::getImage()
-//{
-//    return image;
-//}
-//
-//void LSprite::setRect(SDL_Rect rect)
-//{
-//    this -> rect = rect;
-//}
-//
-//void LSprite::move()
-//{
-//    lastX = x;
-//    lastY = y;
-//    x += speed*cos(angle);
-//    y += speed*sin(angle);
-//    rect.x = int(x);
-//    rect.y = int(y);
-//}
-//
-//void LSprite::draw(SDL_Surface* dest)
-//{
-//    blit(image,dest,int(x),int(y));
-//}
+    //Unpause the timer
+    mPaused = false;
 
+	//Clear tick variables
+	mStartTicks = 0;
+	mPausedTicks = 0;
+}
+
+void LTimer::pause()
+{
+    //If the timer is running and isn't already paused
+    if( mStarted && !mPaused )
+    {
+        //Pause the timer
+        mPaused = true;
+
+        //Calculate the paused ticks
+        mPausedTicks = SDL_GetTicks() - mStartTicks;
+		mStartTicks = 0;
+    }
+}
+
+void LTimer::unpause()
+{
+    //If the timer is running and paused
+    if( mStarted && mPaused )
+    {
+        //Unpause the timer
+        mPaused = false;
+
+        //Reset the starting ticks
+        mStartTicks = SDL_GetTicks() - mPausedTicks;
+
+        //Reset the paused ticks
+        mPausedTicks = 0;
+    }
+}
+
+Uint32 LTimer::getTicks()
+{
+	//The actual timer time
+	Uint32 time = 0;
+
+    //If the timer is running
+    if( mStarted )
+    {
+        //If the timer is paused
+        if( mPaused )
+        {
+            //Return the number of ticks when the timer was paused
+            time = mPausedTicks;
+        }
+        else
+        {
+            //Return the current time minus the start time
+            time = SDL_GetTicks() - mStartTicks;
+        }
+    }
+
+    return time;
+}
+
+bool LTimer::isStarted()
+{
+	//Timer is running and paused or unpaused
+    return mStarted;
+}
+
+bool LTimer::isPaused()
+{
+	//Timer is running and paused
+    return mPaused && mStarted;
+}
 
 bool init()
 {
@@ -372,24 +446,9 @@ bool loadMedia()
         return 3;
     }
     SDL_FreeSurface(pngSurface);
-//    shipSurface = IMG_Load("Assets/Ship.png");
-//    if (shipSurface == NULL )
-//    {
-//        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Couldn't create surface from image: %s",SDL_GetError());
-//        success = false;
-//        return 3;
-//    } 
-//    shipTexture = SDL_CreateTextureFromSurface(renderer, shipSurface);
-//    if(!shipTexture)
-//    {
-//        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,"Couldn't create texture from surface %s",SDL_GetError());
-//        success = false;
-//        return 3;
-//    }
-//    SDL_FreeSurface(shipSurface);
     
-    	//Load sprite sheet texture
-	if( !gSpriteSheetTexture.loadFromFile( "Assets/Ship.png" ) )
+    //Load sprite sheet texture
+	if( !shipLTexture.loadFromFile( "Assets/Ship.png" ) )
 	{
 		printf( "Failed to load sprite sheet texture!\n" );
 		success = false;
@@ -406,30 +465,6 @@ bool loadMedia()
     return success;
 }
 
-void close()
-{
-    
-    //Deallocate surface
-    SDL_FreeSurface(surface);
-    SDL_FreeSurface(pngSurface);
-    SDL_FreeSurface(shipSurface);
-    
-    //Free loaded images
-    gSpriteSheetTexture.free();
-    
-    //Destroy Window
-    SDL_DestroyTexture(texture);
-    SDL_DestroyRenderer(renderer);
-    SDL_DestroyWindow(window);
-    SDL_DestroyRenderer( gRenderer );
-    SDL_DestroyWindow( gWindow );
-    gWindow = NULL;
-    gRenderer = NULL;
-    
-    //Quit SDL subsystems
-    IMG_Quit();
-    SDL_Quit();
-}
 
 int main(int argc, char *argv[])
 {
@@ -450,66 +485,79 @@ int main(int argc, char *argv[])
             //Main loop flag
             bool quit = false;
         
+            //Keeps track of the time between steps
+            LTimer stepTimer;
+            
             //Event handler
-            SDL_Event event;
+            SDL_Event e;
             
             //While application is running
             while ( !quit )
             {
-                //x&y vars for ship sprite
-                int shipx = 0;
-                int shipy = 0;
                 //Handle events on queue
-                while ( SDL_PollEvent(&event) != 0 )
+                while ( SDL_PollEvent(&e) != 0 )
                 {
                     //User requests quit
-                    if (event.type == SDL_QUIT) 
+                    if (e.type == SDL_QUIT) 
                     {
                         quit = true;
                     }
-                    //User presses a key
-                    else if ( event.type == SDL_KEYDOWN )
-                        //Select surfaces based on key press
-                        switch( event.key.keysym.sym )
-                        {
-                            case SDLK_UP:
-                            printf("Pressed Up\n");
-//                            shipy -= 2;
-//                            gCurrentTexture = gKeyPressTextures[ KEY_PRESS_TEXTURE_UP ];
-                            break;
-                            case SDLK_DOWN:
-                            printf("Pressed Down\n");
-//                            shipy += 2;
-//                            gCurrentTexture = gKeyPressTextures[ KEY_PRESS_TEXTURE_DOWN ];
-                            break;
-                            case SDLK_LEFT:
-//                            shipx -= 2;
-                            printf("Pressed Left\n");
-//                            gCurrentTexture = gKeyPressTextures[ KEY_PRESS_TEXTURE_LEFT ];
-                            break;
-                            case SDLK_RIGHT:
-//                            shipx += 2;
-                            printf("Pressed Right\n");
-//                            gCurrentTexture = gKeyPressTextures[ KEY_PRESS_TEXTURE_RIGHT ];
-                            break;
-                            case SDLK_h:
-                            printf("Pressed H key\n");
-                            break;
-                            case SDLK_ESCAPE:
-                            close();
-                            return 0;
-                            default:
-                            printf("Key pressed\n");
-//                            gCurrentTexture = pngTexture;
-                            break;
-                        }
+                    //Handle input for the Ship
+                    shipLTexture.handleEvent( e );
+                    
+//                    //User presses a key
+//                    else if ( event.type == SDL_KEYDOWN )
+//                        //Select surfaces based on key press
+//                        switch( event.key.keysym.sym )
+//                        {
+//                            case SDLK_UP:
+//                            printf("Pressed Up\n");
+////                            shipy -= 2;
+////                            gCurrentTexture = gKeyPressTextures[ KEY_PRESS_TEXTURE_UP ];
+//                            break;
+//                            case SDLK_DOWN:
+//                            printf("Pressed Down\n");
+////                            shipy += 2;
+////                            gCurrentTexture = gKeyPressTextures[ KEY_PRESS_TEXTURE_DOWN ];
+//                            break;
+//                            case SDLK_LEFT:
+////                            shipx -= 2;
+//                            printf("Pressed Left\n");
+////                            gCurrentTexture = gKeyPressTextures[ KEY_PRESS_TEXTURE_LEFT ];
+//                            break;
+//                            case SDLK_RIGHT:
+////                            shipx += 2;
+//                            printf("Pressed Right\n");
+////                            gCurrentTexture = gKeyPressTextures[ KEY_PRESS_TEXTURE_RIGHT ];
+//                            break;
+//                            case SDLK_h:
+//                            printf("Pressed H key\n");
+//                            break;
+//                            case SDLK_ESCAPE:
+//                            close();
+//                            return 0;
+//                            default:
+//                            printf("Key pressed\n");
+////                            gCurrentTexture = pngTexture;
+//                            break;
+//                        }
                 }
+                //Calculate the time step
+                float timeStep = stepTimer.getTicks() / 1000.f;
+                
+                //Move for time step
+                shipLTexture.move( timeStep);
+                
+                //Restart step stepTimer
+                stepTimer.start();
+                
                 //Render the image
                 SDL_SetRenderDrawColor(gRenderer, 0x00, 0x00, 0x00, 0x00);
                 SDL_RenderClear(gRenderer);
                 SDL_RenderCopy(gRenderer, pngTexture, NULL, NULL);
-//                SDL_RenderCopy(renderer, shipTexture, NULL, shipRect);
-                gSpriteSheetTexture.render( 0, 0, &gSpriteClip );
+                
+                shipLTexture.render( (int)mPosX, (int)mPosY );
+                //shipLTexture.render( 0, 0, &gSpriteClip );
                 SDL_RenderPresent(gRenderer);
             }
         }
